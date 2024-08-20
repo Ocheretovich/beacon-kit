@@ -23,10 +23,9 @@ package node
 import (
 	"context"
 
-	"github.com/berachain/beacon-kit/mod/node-core/pkg/app"
 	"github.com/berachain/beacon-kit/mod/node-core/pkg/types"
+	"github.com/berachain/beacon-kit/mod/runtime/pkg/cosmos/runtime"
 	"github.com/berachain/beacon-kit/mod/runtime/pkg/service"
-	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 )
 
 // Compile-time assertion that node implements the NodeI interface.
@@ -34,7 +33,7 @@ var _ types.Node = (*node)(nil)
 
 // node is the hard-type representation of the beacon-kit node.
 type node struct {
-	*app.BeaconApp
+	*runtime.App
 
 	// registry is the node's service registry.
 	registry *service.Registry
@@ -51,9 +50,9 @@ func (n *node) Start(ctx context.Context) error {
 }
 
 // SetApplication sets the application.
-func (n *node) RegisterApp(a servertypes.Application) {
+func (n *node) RegisterApp(a types.Application) {
 	//nolint:errcheck // BeaconApp is our servertypes.Application
-	n.BeaconApp = a.(*app.BeaconApp)
+	n.App = a.(*runtime.App)
 }
 
 // SetServiceRegistry sets the service registry.

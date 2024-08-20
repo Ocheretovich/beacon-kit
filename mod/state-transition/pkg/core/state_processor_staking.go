@@ -31,7 +31,7 @@ import (
 // processOperations processes the operations and ensures they match the
 // local state.
 func (sp *StateProcessor[
-	BeaconBlockT, _, _, BeaconStateT, _, _, _, _, _, _, _, _, _, _, _,
+	BeaconBlockT, _, _, BeaconStateT, _, _, _, _, _, _, _, _, _, _, _, _, _,
 ]) processOperations(
 	st BeaconStateT,
 	blk BeaconBlockT,
@@ -49,7 +49,7 @@ func (sp *StateProcessor[
 	}
 	depositCount := min(
 		sp.cs.MaxDepositsPerBlock(),
-		uint64(eth1Data.GetDepositCount())-index,
+		eth1Data.GetDepositCount().Unwrap()-index,
 	)
 	_ = depositCount
 	// TODO: Update eth1data count and check this.
@@ -59,10 +59,10 @@ func (sp *StateProcessor[
 	return sp.processDeposits(st, deposits)
 }
 
-// processDeposits processes the deposits and ensures they match the
+// processDeposits processes the deposits and ensures  they match the
 // local state.
 func (sp *StateProcessor[
-	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, _, _, _,
+	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, _, _, _, _, _,
 ]) processDeposits(
 	st BeaconStateT,
 	deposits []DepositT,
@@ -78,7 +78,7 @@ func (sp *StateProcessor[
 
 // processDeposit processes the deposit and ensures it matches the local state.
 func (sp *StateProcessor[
-	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, _, _, _,
+	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, _, _, _, _, _,
 ]) processDeposit(
 	st BeaconStateT,
 	dep DepositT,
@@ -110,7 +110,7 @@ func (sp *StateProcessor[
 
 // applyDeposit processes the deposit and ensures it matches the local state.
 func (sp *StateProcessor[
-	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, ValidatorT, _, _,
+	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, ValidatorT, _, _, _, _,
 ]) applyDeposit(
 	st BeaconStateT,
 	dep DepositT,
@@ -137,7 +137,7 @@ func (sp *StateProcessor[
 
 // createValidator creates a validator if the deposit is valid.
 func (sp *StateProcessor[
-	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, ForkDataT, _, _, _, _,
+	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, ForkDataT, _, _, _, _, _, _,
 ]) createValidator(
 	st BeaconStateT,
 	dep DepositT,
@@ -188,7 +188,7 @@ func (sp *StateProcessor[
 
 // addValidatorToRegistry adds a validator to the registry.
 func (sp *StateProcessor[
-	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, ValidatorT, _, _,
+	_, _, _, BeaconStateT, _, DepositT, _, _, _, _, _, _, ValidatorT, _, _, _, _,
 ]) addValidatorToRegistry(
 	st BeaconStateT,
 	dep DepositT,
@@ -225,7 +225,7 @@ func (sp *StateProcessor[
 //
 //nolint:lll
 func (sp *StateProcessor[
-	_, BeaconBlockBodyT, _, BeaconStateT, _, _, _, _, _, _, _, _, _, _, _,
+	_, BeaconBlockBodyT, _, BeaconStateT, _, _, _, _, _, _, _, _, _, _, _, _, _,
 ]) processWithdrawals(
 	st BeaconStateT,
 	body BeaconBlockBodyT,
@@ -246,7 +246,8 @@ func (sp *StateProcessor[
 
 	// Ensure the withdrawals have the same length
 	if numWithdrawals != len(payloadWithdrawals) {
-		return errors.Newf(
+		return errors.Wrapf(
+			ErrNumWithdrawalsMismatch,
 			"withdrawals do not match expected length %d, got %d",
 			len(expectedWithdrawals), len(payloadWithdrawals),
 		)
@@ -256,7 +257,8 @@ func (sp *StateProcessor[
 	for i, wd := range expectedWithdrawals {
 		// Ensure the withdrawals match the local state.
 		if !wd.Equals(payloadWithdrawals[i]) {
-			return errors.Newf(
+			return errors.Wrapf(
+				ErrNumWithdrawalsMismatch,
 				"withdrawals do not match expected %s, got %s",
 				spew.Sdump(wd), spew.Sdump(payloadWithdrawals[i]),
 			)

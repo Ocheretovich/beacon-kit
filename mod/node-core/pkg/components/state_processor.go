@@ -22,6 +22,7 @@ package components
 
 import (
 	"cosmossdk.io/depinject"
+	engineprimitives "github.com/berachain/beacon-kit/mod/engine-primitives/pkg/engine-primitives"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/crypto"
 	"github.com/berachain/beacon-kit/mod/state-transition/pkg/core"
@@ -40,7 +41,7 @@ type StateProcessorInput struct {
 // framework.
 func ProvideStateProcessor(
 	in StateProcessorInput,
-) StateProcessor {
+) *StateProcessor {
 	return core.NewStateProcessor[
 		*BeaconBlock,
 		*BeaconBlockBody,
@@ -55,7 +56,9 @@ func ProvideStateProcessor(
 		*ForkData,
 		*KVStore,
 		*Validator,
+		Validators,
 		*Withdrawal,
+		engineprimitives.Withdrawals,
 		WithdrawalCredentials,
 	](
 		in.ChainSpec,

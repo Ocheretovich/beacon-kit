@@ -21,21 +21,17 @@
 package middleware
 
 import (
-	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/constraints"
-	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
-	"github.com/berachain/beacon-kit/mod/primitives/pkg/transition"
 )
 
 // BeaconBlock is an interface for accessing the beacon block.
-type BeaconBlock[T any] interface {
+type BeaconBlock[SelfT any] interface {
 	constraints.SSZMarshallable
 	constraints.Nillable
-	GetSlot() math.Slot
-	NewFromSSZ([]byte, uint32) (T, error)
+	constraints.Empty[SelfT]
+	NewFromSSZ([]byte, uint32) (SelfT, error)
 }
 
 // TelemetrySink is an interface for sending metrics to a telemetry backend.
@@ -44,35 +40,7 @@ type TelemetrySink interface {
 	MeasureSince(key string, start time.Time, args ...string)
 }
 
-// BlockchainService defines the interface for interacting with the blockchain
-// state and processing blocks.
-type BlockchainService[
-	BeaconBlockT any,
-	BlobSidecarsT constraints.SSZMarshallable,
-	DepositT any,
-	GenesisT Genesis,
-] interface {
-	// ProcessGenesisData processes the genesis data and initializes the beacon
-	// state.
-	ProcessGenesisData(
-		context.Context,
-		GenesisT,
-	) (transition.ValidatorUpdates, error)
-	// ProcessBeaconBlock processes the given beacon block and associated
-	// blobs sidecars.
-	ProcessBeaconBlock(
-		context.Context,
-		BeaconBlockT,
-	) (transition.ValidatorUpdates, error)
-	// ReceiveBlock receives a beacon block and
-	// associated blobs sidecars for processing.
-	ReceiveBlock(
-		ctx context.Context,
-		blk BeaconBlockT,
-	) error
-}
-
-// Genesis is the interface for the genesis data.
-type Genesis interface {
-	json.Unmarshaler
+type BlobSidecars[T any] interface {
+	constraints.SSZMarshallable
+	constraints.Empty[T]
 }

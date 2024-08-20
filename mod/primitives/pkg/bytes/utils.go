@@ -28,16 +28,13 @@ import (
 // ------------------------------ Helpers ------------------------------
 
 // Helper function to unmarshal JSON for various byte types.
-func unmarshalJSONHelper(target []byte, input []byte) error {
+func UnmarshalJSONHelper(target []byte, input []byte) error {
 	bz := Bytes{}
 	if err := bz.UnmarshalJSON(input); err != nil {
 		return err
 	}
 	if len(bz) != len(target) {
-		return errors.Newf(
-			"incorrect length, expected %d bytes but got %d",
-			len(target), len(bz),
-		)
+		return errors.New("incorrect length")
 	}
 	copy(target, bz)
 	return nil
@@ -50,37 +47,10 @@ func UnmarshalTextHelper(target []byte, text []byte) error {
 		return err
 	}
 	if len(bz) != len(target) {
-		return errors.Newf(
-			"incorrect length, expected %d bytes but got %d",
-			len(target), len(bz),
-		)
+		return errors.New("incorrect length")
 	}
 	copy(target, bz)
 	return nil
-}
-
-// MustFromHex returns the bytes represented by the given hex string.
-// It panics if the input is not a valid hex string.
-func MustFromHex(input string) []byte {
-	bz, err := FromHex(input)
-	if err != nil {
-		panic(err)
-	}
-	return bz
-}
-
-// FromHex returns the bytes represented by the given hex string.
-// An error is returned if the input is not a valid hex string.
-func FromHex(input string) ([]byte, error) {
-	s, err := hex.NewStringStrict(input)
-	if err != nil {
-		return nil, err
-	}
-	h, err := s.ToBytes()
-	if err != nil {
-		return nil, err
-	}
-	return h, nil
 }
 
 // CopyAndReverseEndianess will copy the input byte slice and return the

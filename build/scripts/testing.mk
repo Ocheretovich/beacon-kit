@@ -10,6 +10,7 @@
 #    beacond     #
 #################
 
+DEVNET_CHAIN_SPEC = devnet
 JWT_PATH = ${TESTAPP_FILES_DIR}/jwt.hex
 ETH_GENESIS_PATH = ${TESTAPP_FILES_DIR}/eth-genesis.json
 NETHER_ETH_GENESIS_PATH = ${TESTAPP_FILES_DIR}/eth-nether-genesis.json
@@ -20,10 +21,68 @@ HTTP_URL = localhost:8551
 IPC_PREFIX = ipc://
 HTTP_PREFIX = http://
 
+#################
+#    bartio     #
+#################
+
+TESTNET_CHAIN_SPEC = testnet
+BARTIO_NETWORK_FILES_DIR = ${TESTAPP_FILES_DIR}/../networks/80084
+BARTIO_ETH_GENESIS_PATH = ${BARTIO_NETWORK_FILES_DIR}/eth-genesis.json
+
 ## Testing:
 start: ## start an ephemeral `beacond` node
-	@JWT_SECRET_PATH=$(JWT_PATH) ${TESTAPP_FILES_DIR}/entrypoint.sh
+	@JWT_SECRET_PATH=$(JWT_PATH) \
+	CHAIN_SPEC=$(DEVNET_CHAIN_SPEC) \
+	${TESTAPP_FILES_DIR}/entrypoint.sh
 
+start-bartio:
+	@JWT_SECRET_PATH=$(JWT_PATH) \
+	CHAIN_SPEC=$(TESTNET_CHAIN_SPEC) \
+	${TESTAPP_FILES_DIR}/entrypoint.sh
+
+#######################################################
+# Start `beacond` using docker image connected to bArtio				  #
+#######################################################
+# TODO: For restoring snapshot, pre-requsites:
+# Place the snapshot in the `./.tmp/beacond/data` directory.
+
+IP_ADDRESS := $(shell hostname -I | awk '{print $$1}')
+RPC_URL = "http://${IP_ADDRESS}:8551"
+IMAGE_NAME = beacond
+VERSION = kurtosis-local
+
+IMAGE_EXISTS := $(shell docker image ls -q $(IMAGE_NAME):$(VERSION))
+
+build-beacond-image:
+ifdef IMAGE_EXISTS
+	@echo "Image $(IMAGE_NAME):$(VERSION) already exists."
+else
+	@echo "Image $(IMAGE_NAME):$(VERSION) does not exist. Building image..."
+	make build-docker VERSION=kurtosis-local
+endif 
+
+start-bartio-docker: build-beacond-image
+	docker run --rm \
+	-v $(PWD)/${TESTAPP_FILES_DIR}:/${TESTAPP_FILES_DIR} \
+	-v $(PWD)/${BARTIO_NETWORK_FILES_DIR}:/${BARTIO_NETWORK_FILES_DIR} \
+	-v $(PWD)/.tmp:/.tmp \
+	-e CHAIN_SPEC=testnet \
+	${IMAGE_NAME}:${VERSION} \
+	start \
+	--home "./.tmp/beacond" \
+	--pruning=nothing \
+	--api.enable \
+	--api.enabled-unsafe-cors \
+	--beacon-kit.engine.jwt-secret-path ${JWT_PATH} \
+	--beacon-kit.engine.rpc-dial-url=${RPC_URL} \
+	--beacon-kit.node-api.enabled \
+	--beacon-kit.node-api.logging \
+	--beacon-kit.node-api.address \
+	--beacon-kit.block-store-service.enabled \
+	--beacon-kit.block-store-service.pruner-enabled \
+	--beacon-kit.logger.log-level info
+
+#######################################################
 # start-ipc is currently only supported while running eth client the host machine
 # Only works with geth-host rn
 start-ipc: ## start a local ephemeral `beacond` node with IPC
@@ -42,6 +101,25 @@ start-reth: ## start an ephemeral `reth` node
 	-v $(PWD)/.tmp:/.tmp \
 	ghcr.io/paradigmxyz/reth node \
 	--chain ${ETH_GENESIS_PATH} \
+	--http \
+	--http.addr "0.0.0.0" \
+	--http.api eth,net \
+	--authrpc.addr "0.0.0.0" \
+	--authrpc.jwtsecret $(JWT_PATH) \
+	--datadir ${ETH_DATA_DIR} \
+	--ipcpath ${IPC_PATH}
+
+start-reth-bartio:
+	@rm -rf ${ETH_DATA_DIR}
+	@docker run \
+	-p 30303:30303 \
+	-p 8545:8545 \
+	-p 8551:8551 \
+	--rm -v $(PWD)/${TESTAPP_FILES_DIR}:/${TESTAPP_FILES_DIR} \
+	--rm -v $(PWD)/${BARTIO_NETWORK_FILES_DIR}:/${BARTIO_NETWORK_FILES_DIR} \
+	-v $(PWD)/.tmp:/.tmp \
+	ghcr.io/paradigmxyz/reth node \
+	--chain ${BARTIO_ETH_GENESIS_PATH} \
 	--http \
 	--http.addr "0.0.0.0" \
 	--http.api eth,net \
@@ -77,6 +155,33 @@ start-geth: ## start an ephemeral `geth` node with docker
 	-p 8545:8545 \
 	-p 8551:8551 \
 	--rm -v $(PWD)/${TESTAPP_FILES_DIR}:/${TESTAPP_FILES_DIR} \
+	-v $(PWD)/.tmp:/.tmp \
+	ethereum/client-go \
+	--http \
+	--http.addr 0.0.0.0 \
+	--http.api eth,net \
+	--authrpc.addr 0.0.0.0 \
+	--authrpc.jwtsecret $(JWT_PATH) \
+	--authrpc.vhosts "*" \
+	--datadir ${ETH_DATA_DIR} \
+	--ipcpath ${IPC_PATH}
+
+start-geth-bartio:
+	rm -rf ${ETH_DATA_DIR}
+	docker run \
+	--rm -v $(PWD)/${TESTAPP_FILES_DIR}:/${TESTAPP_FILES_DIR} \
+	--rm -v $(PWD)/${BARTIO_NETWORK_FILES_DIR}:/${BARTIO_NETWORK_FILES_DIR} \
+	-v $(PWD)/.tmp:/.tmp \
+	ethereum/client-go init \
+	--datadir ${ETH_DATA_DIR} \
+	${BARTIO_ETH_GENESIS_PATH}
+
+	docker run \
+	-p 30303:30303 \
+	-p 8545:8545 \
+	-p 8551:8551 \
+	--rm -v $(PWD)/${TESTAPP_FILES_DIR}:/${TESTAPP_FILES_DIR} \
+	--rm -v $(PWD)/${BARTIO_NETWORK_FILES_DIR}:/${BARTIO_NETWORK_FILES_DIR} \
 	-v $(PWD)/.tmp:/.tmp \
 	ethereum/client-go \
 	--http \
@@ -173,12 +278,15 @@ start-ethereumjs:
 	-p 30303:30303 \
 	-p 8545:8545 \
 	-p 8551:8551 \
-	ethpandaops/ethereumjs:stable \
+	ethpandaops/ethereumjs:master \
 	--gethGenesis ../../${ETH_GENESIS_PATH} \
 	--rpcEngine \
 	--jwtSecret ../../$(JWT_PATH) \
 	--rpcEngineAddr 0.0.0.0 \
-	--dataDir .tmp/ethereumjs
+	--dataDir .tmp/ethereumjs \
+	--isSingleNode \
+	--rpc \
+	--rpcAddr 0.0.0.0
 
 start-nimbus:
 	rm -rf .tmp/nimbus

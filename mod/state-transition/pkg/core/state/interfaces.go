@@ -36,13 +36,12 @@ type KVStore[
 	ExecutionPayloadHeaderT,
 	ForkT,
 	ValidatorT any,
+	ValidatorsT ~[]ValidatorT,
 ] interface {
 	// Context returns the context of the key-value store.
 	Context() context.Context
 	// WithContext returns a new key-value store with the given context.
 	WithContext(ctx context.Context) T
-	// Save saves the key-value store.
-	Save()
 	// Copy returns a copy of the key-value store.
 	Copy() T
 	// GetLatestExecutionPayloadHeader retrieves the latest execution payload
@@ -89,7 +88,7 @@ type KVStore[
 	// SetEth1Data sets the eth1 data.
 	SetEth1Data(data Eth1DataT) error
 	// GetValidators retrieves all validators.
-	GetValidators() ([]ValidatorT, error)
+	GetValidators() (ValidatorsT, error)
 	// GetBalances retrieves all balances.
 	GetBalances() ([]uint64, error)
 	// GetNextWithdrawalIndex retrieves the next withdrawal index.
@@ -144,6 +143,4 @@ type KVStore[
 	// GetValidatorsByEffectiveBalance retrieves validators by effective
 	// balance.
 	GetValidatorsByEffectiveBalance() ([]ValidatorT, error)
-	// RemoveValidatorAtIndex removes the validator at the given index.
-	RemoveValidatorAtIndex(idx math.ValidatorIndex) error
 }

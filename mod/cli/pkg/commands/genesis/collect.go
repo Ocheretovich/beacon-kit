@@ -21,15 +21,14 @@
 package genesis
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/berachain/beacon-kit/mod/cli/pkg/utils/context"
-	"github.com/berachain/beacon-kit/mod/consensus-types/pkg/genesis"
 	"github.com/berachain/beacon-kit/mod/consensus-types/pkg/types"
 	"github.com/berachain/beacon-kit/mod/errors"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/encoding/json"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/spf13/afero"
@@ -43,8 +42,7 @@ func CollectGenesisDepositsCmd() *cobra.Command {
 		Use:   "collect-premined-deposits",
 		Short: "adds a validator to the genesis file",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			serverCtx := context.GetServerContextFromCmd(cmd)
-			config := serverCtx.Config
+			config := client.GetConfigFromCmd(cmd)
 
 			appGenesis, err := genutiltypes.AppGenesisFromFile(
 				config.GenesisFile(),
@@ -72,7 +70,7 @@ func CollectGenesisDepositsCmd() *cobra.Command {
 				)
 			}
 
-			genesisInfo := &genesis.Genesis[
+			genesisInfo := &types.Genesis[
 				*types.Deposit,
 				*types.ExecutionPayloadHeader,
 			]{}

@@ -24,8 +24,7 @@ import (
 	"context"
 	"time"
 
-	types "github.com/berachain/beacon-kit/mod/consensus-types/pkg/types"
-	gethprimitives "github.com/berachain/beacon-kit/mod/geth-primitives"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/eip4844"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
 )
@@ -42,15 +41,37 @@ type AvailabilityStore[BeaconBlockBodyT any, BlobSidecarsT any] interface {
 	Persist(math.Slot, BlobSidecarsT) error
 }
 
-type BeaconBlock[BeaconBlockBodyT any] interface {
+type BeaconBlock[
+	BeaconBlockBodyT any,
+	BeaconBlockHeaderT any,
+] interface {
 	GetBody() BeaconBlockBodyT
-	GetHeader() *types.BeaconBlockHeader
+	GetHeader() BeaconBlockHeaderT
 }
 
 type BeaconBlockBody interface {
-	GetBlobKzgCommitments() eip4844.KZGCommitments[gethprimitives.ExecutionHash]
-	GetTopLevelRoots() ([][32]byte, error)
+	GetBlobKzgCommitments() eip4844.KZGCommitments[common.ExecutionHash]
+	GetTopLevelRoots() []common.Root
 	Length() uint64
+}
+
+type BeaconBlockHeader interface {
+	GetSlot() math.Slot
+}
+
+type Sidecar[BeaconBlockHeaderT any] interface {
+	GetBeaconBlockHeader() BeaconBlockHeaderT
+	GetBlob() eip4844.Blob
+	GetKzgProof() eip4844.KZGProof
+	GetKzgCommitment() eip4844.KZGCommitment
+}
+
+type Sidecars[SidecarT any] interface {
+	Len() int
+	Get(index int) SidecarT
+	GetSidecars() []SidecarT
+	ValidateBlockRoots() error
+	VerifyInclusionProofs(kzgOffset uint64) error
 }
 
 // ChainSpec represents a chain spec.

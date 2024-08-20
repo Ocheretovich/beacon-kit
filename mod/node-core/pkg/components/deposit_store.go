@@ -22,9 +22,10 @@ package components
 
 import (
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log"
 	storev2 "cosmossdk.io/store/v2/db"
 	"github.com/berachain/beacon-kit/mod/execution/pkg/deposit"
+	"github.com/berachain/beacon-kit/mod/log"
+	"github.com/berachain/beacon-kit/mod/node-core/pkg/components/storage"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	depositstore "github.com/berachain/beacon-kit/mod/storage/pkg/deposit"
 	"github.com/berachain/beacon-kit/mod/storage/pkg/manager"
@@ -52,25 +53,25 @@ func ProvideDepositStore(
 		return nil, err
 	}
 
-	return depositstore.NewStore[*Deposit](
-		&depositstore.KVStoreProvider{
-			KVStoreWithBatch: kvp,
-		},
-	), nil
+	return depositstore.NewStore[*Deposit](storage.NewKVStoreProvider(kvp)), nil
 }
 
 // DepositPrunerInput is the input for the deposit pruner.
-type DepositPrunerInput struct {
+type DepositPrunerInput[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+] struct {
 	depinject.In
 	BlockBroker  *BlockBroker
 	ChainSpec    common.ChainSpec
 	DepositStore *DepositStore
-	Logger       log.Logger
+	Logger       LoggerT
 }
 
 // ProvideDepositPruner provides a deposit pruner for the depinject framework.
-func ProvideDepositPruner(
-	in DepositPrunerInput,
+func ProvideDepositPruner[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+](
+	in DepositPrunerInput[LoggerT],
 ) (DepositPruner, error) {
 	subCh, err := in.BlockBroker.Subscribe()
 	if err != nil {
@@ -78,21 +79,15 @@ func ProvideDepositPruner(
 		return nil, err
 	}
 
-	return pruner.NewPruner[
-		*BeaconBlock,
-		*BlockEvent,
-		*DepositStore,
-	](
+	return pruner.NewPruner[*BeaconBlock, *DepositStore](
 		in.Logger.With("service", manager.DepositPrunerName),
 		in.DepositStore,
 		manager.DepositPrunerName,
 		subCh,
 		deposit.BuildPruneRangeFn[
-			*BeaconBlockBody,
 			*BeaconBlock,
-			*BlockEvent,
+			*BeaconBlockBody,
 			*Deposit,
-			*ExecutionPayload,
 			WithdrawalCredentials,
 		](in.ChainSpec),
 	), nil

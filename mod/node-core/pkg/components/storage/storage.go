@@ -23,137 +23,86 @@ package storage
 import (
 	"context"
 
-	"github.com/berachain/beacon-kit/mod/consensus-types/pkg/types"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
-	"github.com/berachain/beacon-kit/mod/state-transition/pkg/core"
-	"github.com/berachain/beacon-kit/mod/state-transition/pkg/core/state"
 )
 
 // Backend is a struct that holds the storage backend. It provides a simple
 // interface to access all types of storage required by the runtime.
 type Backend[
-	AvailabilityStoreT AvailabilityStore[
-		BeaconBlockBodyT, BlobSidecarsT,
-	],
-	BeaconBlockBodyT types.RawBeaconBlockBody,
-	BeaconBlockHeaderT core.BeaconBlockHeader[BeaconBlockHeaderT],
-	BeaconStateT core.BeaconState[
-		BeaconStateT, BeaconBlockHeaderT, Eth1DataT, ExecutionPayloadHeaderT,
-		ForkT, KVStoreT, ValidatorT, WithdrawalT,
-	],
-	BeaconStateMarshallableT state.BeaconStateMarshallable[
-		BeaconStateMarshallableT, BeaconBlockHeaderT, Eth1DataT,
-		ExecutionPayloadHeaderT, ForkT, ValidatorT,
-	],
-	BlobSidecarsT any,
-	DepositT Deposit,
-	DepositStoreT DepositStore[DepositT],
-	Eth1DataT,
-	ExecutionPayloadHeaderT,
-	ForkT any,
-	KVStoreT KVStore[
-		KVStoreT, BeaconBlockHeaderT, Eth1DataT,
-		ExecutionPayloadHeaderT, ForkT, ValidatorT,
-	],
-	ValidatorT Validator[WithdrawalCredentialsT],
-	WithdrawalT Withdrawal[WithdrawalT],
-	WithdrawalCredentialsT WithdrawalCredentials,
+	AvailabilityStoreT any,
+	BeaconStateT BeaconState[BeaconStateT, KVStoreT],
+	BlockStoreT any,
+	DepositStoreT any,
+	KVStoreT KVStore[KVStoreT],
 ] struct {
-	cs common.ChainSpec
-	as AvailabilityStoreT
-	bs KVStoreT
-	ds DepositStoreT
+	chainSpec         common.ChainSpec
+	availabilityStore AvailabilityStoreT
+	kvStore           KVStoreT
+	depositStore      DepositStoreT
+	blockStore        BlockStoreT
 }
 
 func NewBackend[
-	AvailabilityStoreT AvailabilityStore[
-		BeaconBlockBodyT, BlobSidecarsT,
-	],
-	BeaconBlockBodyT types.RawBeaconBlockBody,
-	BeaconBlockHeaderT core.BeaconBlockHeader[BeaconBlockHeaderT],
-	BeaconStateT core.BeaconState[
-		BeaconStateT, BeaconBlockHeaderT, Eth1DataT, ExecutionPayloadHeaderT,
-		ForkT, KVStoreT, ValidatorT, WithdrawalT,
-	],
-	BeaconStateMarshallableT state.BeaconStateMarshallable[
-		BeaconStateMarshallableT, BeaconBlockHeaderT, Eth1DataT,
-		ExecutionPayloadHeaderT, ForkT, ValidatorT,
-	],
-	BlobSidecarsT any,
-	DepositT Deposit,
-	DepositStoreT DepositStore[DepositT],
-	Eth1DataT,
-	ExecutionPayloadHeaderT,
-	ForkT any,
-	KVStoreT KVStore[
-		KVStoreT, BeaconBlockHeaderT, Eth1DataT,
-		ExecutionPayloadHeaderT, ForkT, ValidatorT,
-	],
-	ValidatorT Validator[WithdrawalCredentialsT],
-	WithdrawalT Withdrawal[WithdrawalT],
-	WithdrawalCredentialsT WithdrawalCredentials,
+	AvailabilityStoreT any,
+	BeaconStateT BeaconState[BeaconStateT, KVStoreT],
+	BlockStoreT any,
+	DepositStoreT any,
+	KVStoreT KVStore[KVStoreT],
 ](
-	cs common.ChainSpec,
-	as AvailabilityStoreT,
-	bs KVStoreT,
-	ds DepositStoreT,
+	chainSpec common.ChainSpec,
+	availabilityStore AvailabilityStoreT,
+	kvStore KVStoreT,
+	depositStore DepositStoreT,
+	blockStore BlockStoreT,
 ) *Backend[
-	AvailabilityStoreT, BeaconBlockBodyT, BeaconBlockHeaderT, BeaconStateT,
-	BeaconStateMarshallableT, BlobSidecarsT, DepositT, DepositStoreT, Eth1DataT,
-	ExecutionPayloadHeaderT, ForkT, KVStoreT, ValidatorT,
-	WithdrawalT, WithdrawalCredentialsT,
+	AvailabilityStoreT, BeaconStateT, BlockStoreT, DepositStoreT, KVStoreT,
 ] {
 	return &Backend[
-		AvailabilityStoreT, BeaconBlockBodyT, BeaconBlockHeaderT, BeaconStateT,
-		BeaconStateMarshallableT, BlobSidecarsT, DepositT, DepositStoreT, Eth1DataT,
-		ExecutionPayloadHeaderT, ForkT, KVStoreT, ValidatorT,
-		WithdrawalT, WithdrawalCredentialsT,
+		AvailabilityStoreT, BeaconStateT, BlockStoreT, DepositStoreT, KVStoreT,
 	]{
-		cs: cs,
-		as: as,
-		bs: bs,
-		ds: ds,
+		chainSpec:         chainSpec,
+		availabilityStore: availabilityStore,
+		kvStore:           kvStore,
+		depositStore:      depositStore,
+		blockStore:        blockStore,
 	}
 }
 
 // AvailabilityStore returns the availability store struct initialized with a
 // given context.
 func (k Backend[
-	AvailabilityStoreT, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
-]) AvailabilityStore(
-	_ context.Context,
-) AvailabilityStoreT {
-	return k.as
+	AvailabilityStoreT, _, _, _, _,
+]) AvailabilityStore() AvailabilityStoreT {
+	return k.availabilityStore
 }
 
 // BeaconState returns the beacon state struct initialized with a given
 // context and the store key.
 func (k Backend[
-	AvailabilityStoreT, BeaconBlockBodyT, BeaconBlockHeaderT, BeaconStateT,
-	BeaconStateMarshallableT, BlobSidecarsT, DepositT, DepositStoreT, Eth1DataT,
-	ExecutionPayloadHeaderT, ForkT, KVStoreT, ValidatorT,
-	WithdrawalT, WithdrawalCredentialsT,
+	_, BeaconStateT, _, _, _,
 ]) StateFromContext(
 	ctx context.Context,
 ) BeaconStateT {
 	var st BeaconStateT
-	return st.NewFromDB(
-		k.bs.WithContext(ctx), k.cs,
-	)
+	return st.NewFromDB(k.kvStore.WithContext(ctx), k.chainSpec)
 }
 
 // BeaconStore returns the beacon store struct.
 func (k Backend[
-	_, _, _, _, _, _, _, _, _, _, _, KVStoreT, _, _, _,
+	_, _, _, _, KVStoreT,
 ]) BeaconStore() KVStoreT {
-	return k.bs
+	return k.kvStore
+}
+
+func (k Backend[
+	_, _, BlockStoreT, _, _,
+]) BlockStore() BlockStoreT {
+	return k.blockStore
 }
 
 // DepositStore returns the deposit store struct initialized with a.
 func (k Backend[
-	_, _, _, _, _, _, _, DepositStoreT, _, _, _, _, _, _, _,
-]) DepositStore(
-	_ context.Context,
-) DepositStoreT {
-	return k.ds
+	_, _, _, DepositStoreT, _,
+]) DepositStore() DepositStoreT {
+	return k.depositStore
 }

@@ -24,29 +24,34 @@ import (
 	"math/big"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log"
 	"github.com/berachain/beacon-kit/mod/config"
+	engineprimitives "github.com/berachain/beacon-kit/mod/engine-primitives/pkg/engine-primitives"
 	"github.com/berachain/beacon-kit/mod/execution/pkg/client"
 	"github.com/berachain/beacon-kit/mod/execution/pkg/engine"
+	"github.com/berachain/beacon-kit/mod/log"
 	"github.com/berachain/beacon-kit/mod/node-core/pkg/components/metrics"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/net/jwt"
 )
 
 // EngineClientInputs is the input for the EngineClient.
-type EngineClientInputs struct {
+type EngineClientInputs[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+] struct {
 	depinject.In
 	ChainSpec common.ChainSpec
 	Config    *config.Config
 	// TODO: this feels like a hood way to handle it.
 	JWTSecret     *jwt.Secret `optional:"true"`
-	Logger        log.Logger
+	Logger        LoggerT
 	TelemetrySink *metrics.TelemetrySink
 }
 
 // ProvideEngineClient creates a new EngineClient.
-func ProvideEngineClient(
-	in EngineClientInputs,
+func ProvideEngineClient[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+](
+	in EngineClientInputs[LoggerT],
 ) *EngineClient {
 	return client.New[
 		*ExecutionPayload,
@@ -61,24 +66,28 @@ func ProvideEngineClient(
 }
 
 // EngineClientInputs is the input for the EngineClient.
-type ExecutionEngineInputs struct {
+type ExecutionEngineInputs[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+] struct {
 	depinject.In
 	EngineClient  *EngineClient
-	Logger        log.Logger
+	Logger        LoggerT
 	StatusBroker  *StatusBroker
 	TelemetrySink *metrics.TelemetrySink
 }
 
 // ProvideExecutionEngine provides the execution engine to the depinject
 // framework.
-func ProvideExecutionEngine(
-	in ExecutionEngineInputs,
+func ProvideExecutionEngine[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+](
+	in ExecutionEngineInputs[LoggerT],
 ) *ExecutionEngine {
 	return engine.New[
 		*ExecutionPayload,
 		*PayloadAttributes,
 		PayloadID,
-		*Withdrawal,
+		engineprimitives.Withdrawals,
 	](
 		in.EngineClient,
 		in.Logger.With("service", "execution-engine"),

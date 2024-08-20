@@ -25,7 +25,6 @@ import (
 	"time"
 
 	engineprimitives "github.com/berachain/beacon-kit/mod/engine-primitives/pkg/engine-primitives"
-	gethprimitives "github.com/berachain/beacon-kit/mod/geth-primitives"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/constraints"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
@@ -35,7 +34,7 @@ import (
 // AvailabilityStore interface is responsible for validating and storing
 // sidecars for specific blocks, as well as verifying sidecars that have already
 // been stored.
-type AvailabilityStore[BeaconBlockBodyT any, BlobSidecarsT any] interface {
+type AvailabilityStore[BeaconBlockBodyT any] interface {
 	// IsDataAvailable ensures that all blobs referenced in the block are
 	// securely stored before it returns without an error.
 	IsDataAvailable(
@@ -44,16 +43,11 @@ type AvailabilityStore[BeaconBlockBodyT any, BlobSidecarsT any] interface {
 }
 
 // BeaconBlock represents a beacon block interface.
-type BeaconBlock[
-	BeaconBlockBodyT BeaconBlockBody[ExecutionPayloadT],
-	ExecutionPayloadT any,
-] interface {
-	constraints.SSZMarshallable
+type BeaconBlock[BeaconBlockBodyT any] interface {
+	constraints.SSZMarshallableRootable
 	constraints.Nillable
 	// GetSlot returns the slot of the beacon block.
 	GetSlot() math.Slot
-	// GetParentBlockRoot returns the parent block root of the beacon block.
-	GetParentBlockRoot() common.Root
 	// GetStateRoot returns the state root of the beacon block.
 	GetStateRoot() common.Root
 	// GetBody returns the body of the beacon block.
@@ -62,7 +56,7 @@ type BeaconBlock[
 
 // BeaconBlockBody represents the interface for the beacon block body.
 type BeaconBlockBody[ExecutionPayloadT any] interface {
-	constraints.SSZMarshallable
+	constraints.SSZMarshallableRootable
 	constraints.Nillable
 	// GetExecutionPayload returns the execution payload of the beacon block
 	// body.
@@ -71,9 +65,11 @@ type BeaconBlockBody[ExecutionPayloadT any] interface {
 
 // BeaconBlockHeader represents the interface for the beacon block header.
 type BeaconBlockHeader interface {
-	constraints.SSZMarshallable
+	constraints.SSZMarshallableRootable
 	// SetStateRoot sets the state root of the beacon block header.
 	SetStateRoot(common.Root)
+	// GetStateRoot returns the state root of the beacon block header.
+	GetStateRoot() common.Root
 }
 
 // BlobSidecars is the interface for blobs sidecars.
@@ -91,15 +87,7 @@ type ExecutionEngine[PayloadAttributesT any] interface {
 	NotifyForkchoiceUpdate(
 		ctx context.Context,
 		req *engineprimitives.ForkchoiceUpdateRequest[PayloadAttributesT],
-	) (*engineprimitives.PayloadID, *gethprimitives.ExecutionHash, error)
-}
-
-// EventFeed is a generic interface for sending events.
-type EventFeed[EventT any] interface {
-	// Publish sends an event and returns an error if any occurred.
-	Publish(ctx context.Context, event EventT) error
-	// Subscribe returns a channel that will receive events.
-	Subscribe() (chan EventT, error)
+	) (*engineprimitives.PayloadID, *common.ExecutionHash, error)
 }
 
 // ExecutionPayload is the interface for the execution payload.
@@ -112,9 +100,9 @@ type ExecutionPayloadHeader interface {
 	// GetTimestamp returns the timestamp.
 	GetTimestamp() math.U64
 	// GetBlockHash returns the block hash.
-	GetBlockHash() gethprimitives.ExecutionHash
+	GetBlockHash() common.ExecutionHash
 	// GetParentHash returns the parent hash.
-	GetParentHash() gethprimitives.ExecutionHash
+	GetParentHash() common.ExecutionHash
 }
 
 // Genesis is the interface for the genesis.
@@ -138,8 +126,8 @@ type LocalBuilder[BeaconStateT any] interface {
 		slot math.Slot,
 		timestamp uint64,
 		parentBlockRoot common.Root,
-		headEth1BlockHash gethprimitives.ExecutionHash,
-		finalEth1BlockHash gethprimitives.ExecutionHash,
+		headEth1BlockHash common.ExecutionHash,
+		finalEth1BlockHash common.ExecutionHash,
 	) (*engineprimitives.PayloadID, error)
 	// SendForceHeadFCU sends a force head FCU request.
 	SendForceHeadFCU(
@@ -149,11 +137,17 @@ type LocalBuilder[BeaconStateT any] interface {
 	) error
 }
 
+type PayloadAttributes interface {
+	IsNil() bool
+	Version() uint32
+	GetSuggestedFeeRecipient() common.ExecutionAddress
+}
+
 // ReadOnlyBeaconState defines the interface for accessing various components of
 // the beacon state.
 type ReadOnlyBeaconState[
 	T any,
-	BeaconBlockHeaderT BeaconBlockHeader,
+	BeaconBlockHeaderT any,
 	ExecutionPayloadHeaderT any,
 ] interface {
 	// Copy creates a copy of the beacon state.
@@ -172,7 +166,7 @@ type ReadOnlyBeaconState[
 	// GetSlot retrieves the current slot of the beacon state.
 	GetSlot() (math.Slot, error)
 	// HashTreeRoot returns the hash tree root of the beacon state.
-	HashTreeRoot() ([32]byte, error)
+	HashTreeRoot() common.Root
 }
 
 // StateProcessor defines the interface for processing various state transitions
@@ -180,7 +174,6 @@ type ReadOnlyBeaconState[
 type StateProcessor[
 	BeaconBlockT,
 	BeaconStateT,
-	BlobSidecarsT,
 	ContextT,
 	DepositT,
 	ExecutionPayloadHeaderT any,
@@ -209,13 +202,11 @@ type StateProcessor[
 // StorageBackend defines an interface for accessing various storage components
 // required by the beacon node.
 type StorageBackend[
-	AvailabilityStoreT AvailabilityStore[BeaconBlockBodyT, BlobSidecarsT],
-	BeaconBlockBodyT,
-	BeaconStateT,
-	BlobSidecarsT any,
+	AvailabilityStoreT any,
+	BeaconStateT any,
 ] interface {
 	// AvailabilityStore returns the availability store for the given context.
-	AvailabilityStore(context.Context) AvailabilityStoreT
+	AvailabilityStore() AvailabilityStoreT
 	// StateFromContext retrieves the beacon state from the given context.
 	StateFromContext(context.Context) BeaconStateT
 }
@@ -230,3 +221,5 @@ type TelemetrySink interface {
 	// identified by the provided keys.
 	MeasureSince(key string, start time.Time, args ...string)
 }
+
+type ValidatorUpdates = transition.ValidatorUpdates

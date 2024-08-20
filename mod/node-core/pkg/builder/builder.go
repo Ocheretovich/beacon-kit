@@ -24,19 +24,17 @@ import (
 	"context"
 	"io"
 
-	"cosmossdk.io/core/appmodule/v2"
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log"
-	"github.com/berachain/beacon-kit/mod/consensus/pkg/cometbft"
-	"github.com/berachain/beacon-kit/mod/node-core/pkg/app"
+	sdklog "cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
+	"github.com/berachain/beacon-kit/mod/log"
 	"github.com/berachain/beacon-kit/mod/node-core/pkg/components"
 	"github.com/berachain/beacon-kit/mod/node-core/pkg/node"
 	"github.com/berachain/beacon-kit/mod/node-core/pkg/types"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
+	"github.com/berachain/beacon-kit/mod/runtime/pkg/cosmos/runtime"
 	"github.com/berachain/beacon-kit/mod/runtime/pkg/service"
 	dbm "github.com/cosmos/cosmos-db"
-	"github.com/cosmos/cosmos-sdk/runtime"
-	"github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 )
 
@@ -45,18 +43,31 @@ import (
 // TODO: #Make nodebuilder build a node. Currently this is just a builder for
 // the AppCreator function, which is eventually called by cosmos to build a
 // node.
-type NodeBuilder[NodeT types.Node] struct {
+type NodeBuilder[
+	NodeT types.Node,
+	LoggerT interface {
+		log.AdvancedLogger[any, LoggerT]
+		log.Configurable[LoggerT, LoggerConfigT]
+	},
+	LoggerConfigT any,
+] struct {
 	node NodeT
-	// depinjectCfg holds is an extendable config container used by the
-	// depinject framework.
-	depInjectCfg depinject.Config
 	// components is a list of components to provide.
 	components []any
 }
 
 // New returns a new NodeBuilder.
-func New[NodeT types.Node](opts ...Opt[NodeT]) *NodeBuilder[NodeT] {
-	nb := &NodeBuilder[NodeT]{
+func New[
+	NodeT types.Node,
+	LoggerT interface {
+		log.AdvancedLogger[any, LoggerT]
+		log.Configurable[LoggerT, LoggerConfigT]
+	},
+	LoggerConfigT any,
+](
+	opts ...Opt[NodeT, LoggerT, LoggerConfigT],
+) *NodeBuilder[NodeT, LoggerT, LoggerConfigT] {
+	nb := &NodeBuilder[NodeT, LoggerT, LoggerConfigT]{
 		node: node.New[NodeT](),
 	}
 	for _, opt := range opts {
@@ -68,8 +79,8 @@ func New[NodeT types.Node](opts ...Opt[NodeT]) *NodeBuilder[NodeT] {
 // Build uses the node builder options and runtime parameters to
 // build a new instance of the node.
 // It is necessary to adhere to the types.AppCreator[T] interface.
-func (nb *NodeBuilder[NodeT]) Build(
-	logger log.Logger,
+func (nb *NodeBuilder[NodeT, LoggerT, LoggerConfigT]) Build(
+	logger sdklog.Logger,
 	db dbm.DB,
 	traceStore io.Writer,
 	appOpts servertypes.AppOptions,
@@ -82,52 +93,53 @@ func (nb *NodeBuilder[NodeT]) Build(
 	// variables to hold the components needed to set up BeaconApp
 	var (
 		chainSpec       common.ChainSpec
-		appBuilder      *runtime.AppBuilder
 		abciMiddleware  *components.ABCIMiddleware
 		serviceRegistry *service.Registry
+		consensusEngine *components.ConsensusEngine
+		apiBackend      *components.NodeAPIBackend
+		storeKey        = new(storetypes.KVStoreKey)
+		storeKeyDblPtr  = &storeKey
 	)
 
 	// build all node components using depinject
 	if err := depinject.Inject(
 		depinject.Configs(
-			nb.depInjectCfg,
 			depinject.Provide(
 				nb.components...,
 			),
 			depinject.Supply(
 				appOpts,
-				logger,
+				logger.Impl().(LoggerT),
 			),
-			depinject.Invoke(
-				SetLoggerConfig,
-			),
+			// TODO: cosmos depinject bad project, fixed with dig.
+			// depinject.Invoke(
+			// 	SetLoggerConfig[LoggerT, LoggerConfigT],
+			// ),
 		),
-		&appBuilder,
+		&storeKeyDblPtr,
 		&chainSpec,
 		&abciMiddleware,
 		&serviceRegistry,
+		&consensusEngine,
+		&apiBackend,
 	); err != nil {
 		panic(err)
 	}
 
-	// This is a bit of a meme until server/v2.
-	consensusEngine := cometbft.NewConsensusEngine[appmodule.ValidatorUpdate](
-		abciMiddleware,
-	)
-
 	// set the application to a new BeaconApp with necessary ABCI handlers
 	nb.node.RegisterApp(
-		app.NewBeaconKitApp(
-			db, traceStore, true, appBuilder,
+		runtime.NewBeaconKitApp(
+			*storeKeyDblPtr, logger, db, traceStore, true, abciMiddleware,
 			append(
-				server.DefaultBaseappOptions(appOpts),
+				DefaultBaseappOptions(appOpts),
 				WithCometParamStore(chainSpec),
 				WithPrepareProposal(consensusEngine.PrepareProposal),
 				WithProcessProposal(consensusEngine.ProcessProposal),
-				WithPreBlocker(consensusEngine.PreBlock),
 			)...,
 		),
 	)
+	// TODO: so hood
+	apiBackend.AttachNode(nb.node)
 	nb.node.SetServiceRegistry(serviceRegistry)
 
 	// TODO: put this in some post node creation hook/listener.

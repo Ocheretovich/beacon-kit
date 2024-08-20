@@ -22,8 +22,8 @@ package components
 
 import (
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log"
 	"github.com/berachain/beacon-kit/mod/config"
+	"github.com/berachain/beacon-kit/mod/log"
 	payloadbuilder "github.com/berachain/beacon-kit/mod/payload/pkg/builder"
 	"github.com/berachain/beacon-kit/mod/payload/pkg/cache"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
@@ -31,19 +31,23 @@ import (
 )
 
 // LocalBuilderInput is an input for the dep inject framework.
-type LocalBuilderInput struct {
+type LocalBuilderInput[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+] struct {
 	depinject.In
 	AttributesFactory *AttributesFactory
 	Cfg               *config.Config
 	ChainSpec         common.ChainSpec
 	ExecutionEngine   *ExecutionEngine
-	Logger            log.Logger
+	Logger            LoggerT
 }
 
 // ProvideLocalBuilder provides a local payload builder for the
 // depinject framework.
-func ProvideLocalBuilder(
-	in LocalBuilderInput,
+func ProvideLocalBuilder[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+](
+	in LocalBuilderInput[LoggerT],
 ) *LocalBuilder {
 	return payloadbuilder.New[
 		*BeaconState, *ExecutionPayload, *ExecutionPayloadHeader,

@@ -25,15 +25,13 @@ import (
 
 	engineprimitives "github.com/berachain/beacon-kit/mod/engine-primitives/pkg/engine-primitives"
 	"github.com/berachain/beacon-kit/mod/engine-primitives/pkg/engine-primitives/mocks"
-	gethprimitives "github.com/berachain/beacon-kit/mod/geth-primitives"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/bytes"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
 	"github.com/stretchr/testify/require"
 )
 
-type MockExecutionPayload struct {
-}
-type MockWithdrawal struct{}
+type MockExecutionPayload struct{}
 
 func (m MockExecutionPayload) Empty(uint32) MockExecutionPayload {
 	return m
@@ -47,11 +45,11 @@ func (m MockExecutionPayload) Version() uint32 {
 func (m MockExecutionPayload) GetPrevRandao() common.Bytes32 {
 	return common.Bytes32{}
 }
-func (m MockExecutionPayload) GetBlockHash() gethprimitives.ExecutionHash {
-	return gethprimitives.ExecutionHash{}
+func (m MockExecutionPayload) GetBlockHash() common.ExecutionHash {
+	return common.ExecutionHash{}
 }
-func (m MockExecutionPayload) GetParentHash() gethprimitives.ExecutionHash {
-	return gethprimitives.ExecutionHash{}
+func (m MockExecutionPayload) GetParentHash() common.ExecutionHash {
+	return common.ExecutionHash{}
 }
 func (m MockExecutionPayload) GetNumber() math.U64 {
 	return math.U64(0)
@@ -68,14 +66,14 @@ func (m MockExecutionPayload) GetTimestamp() math.U64 {
 func (m MockExecutionPayload) GetExtraData() []byte {
 	return []byte{}
 }
-func (m MockExecutionPayload) GetBaseFeePerGas() math.Wei {
-	return math.Wei{}
+func (m MockExecutionPayload) GetBaseFeePerGas() *math.U256 {
+	return &math.U256{}
 }
 
 func (
 	m MockExecutionPayload,
-) GetFeeRecipient() gethprimitives.ExecutionAddress {
-	return gethprimitives.ExecutionAddress{}
+) GetFeeRecipient() common.ExecutionAddress {
+	return common.ExecutionAddress{}
 }
 func (m MockExecutionPayload) GetStateRoot() common.Bytes32 {
 	return common.Bytes32{}
@@ -83,8 +81,8 @@ func (m MockExecutionPayload) GetStateRoot() common.Bytes32 {
 func (m MockExecutionPayload) GetReceiptsRoot() common.Bytes32 {
 	return common.Bytes32{}
 }
-func (m MockExecutionPayload) GetLogsBloom() []byte {
-	return []byte{}
+func (m MockExecutionPayload) GetLogsBloom() bytes.B256 {
+	return [256]byte{}
 }
 func (m MockExecutionPayload) GetBlobGasUsed() math.U64 {
 	return math.U64(0)
@@ -92,29 +90,16 @@ func (m MockExecutionPayload) GetBlobGasUsed() math.U64 {
 func (m MockExecutionPayload) GetExcessBlobGas() math.U64 {
 	return math.U64(0)
 }
-func (m MockExecutionPayload) GetWithdrawals() []MockWithdrawal {
-	return []MockWithdrawal{}
+func (m MockExecutionPayload) GetWithdrawals() engineprimitives.Withdrawals {
+	return engineprimitives.Withdrawals{}
 }
-func (m MockExecutionPayload) GetTransactions() [][]byte {
+func (m MockExecutionPayload) GetTransactions() engineprimitives.Transactions {
 	return [][]byte{}
-}
-
-func (m MockWithdrawal) GetIndex() math.U64 {
-	return math.U64(0)
-}
-func (m MockWithdrawal) GetAmount() math.U64 {
-	return math.U64(0)
-}
-func (m MockWithdrawal) GetAddress() gethprimitives.ExecutionAddress {
-	return gethprimitives.ExecutionAddress{}
-}
-func (m MockWithdrawal) GetValidatorIndex() math.U64 {
-	return math.U64(0)
 }
 
 func TestBuildNewPayloadRequest(t *testing.T) {
 	executionPayload := MockExecutionPayload{}
-	var versionedHashes []gethprimitives.ExecutionHash
+	var versionedHashes []common.ExecutionHash
 	parentBeaconBlockRoot := common.Root{}
 	optimistic := false
 
@@ -162,7 +147,7 @@ func TestBuildGetPayloadRequest(t *testing.T) {
 
 func TestHasValidVersionedAndBlockHashesPayloadError(t *testing.T) {
 	executionPayload := MockExecutionPayload{}
-	versionedHashes := []gethprimitives.ExecutionHash{}
+	versionedHashes := []common.ExecutionHash{}
 	parentBeaconBlockRoot := common.Root{}
 	optimistic := false
 
@@ -179,8 +164,8 @@ func TestHasValidVersionedAndBlockHashesPayloadError(t *testing.T) {
 
 func TestHasValidVersionedAndBlockHashesMismatchedHashes(t *testing.T) {
 	executionPayload := MockExecutionPayload{}
-	versionedHashes := []gethprimitives.ExecutionHash{
-		gethprimitives.ExecutionHash{},
+	versionedHashes := []common.ExecutionHash{
+		common.ExecutionHash{},
 	}
 	parentBeaconBlockRoot := common.Root{}
 	optimistic := false

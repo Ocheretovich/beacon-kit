@@ -21,6 +21,7 @@
 package config
 
 import (
+	blockstore "github.com/berachain/beacon-kit/mod/beacon/block_store"
 	"github.com/berachain/beacon-kit/mod/beacon/validator"
 	"github.com/berachain/beacon-kit/mod/config/pkg/template"
 	viperlib "github.com/berachain/beacon-kit/mod/config/pkg/viper"
@@ -28,6 +29,7 @@ import (
 	"github.com/berachain/beacon-kit/mod/errors"
 	engineclient "github.com/berachain/beacon-kit/mod/execution/pkg/client"
 	log "github.com/berachain/beacon-kit/mod/log/pkg/phuslu"
+	"github.com/berachain/beacon-kit/mod/node-api/server"
 	"github.com/berachain/beacon-kit/mod/payload/pkg/builder"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
@@ -41,11 +43,13 @@ type AppOptions interface {
 // DefaultConfig returns the default configuration for a BeaconKit chain.
 func DefaultConfig() *Config {
 	return &Config{
-		Engine:         engineclient.DefaultConfig(),
-		Logger:         log.DefaultConfig(),
-		KZG:            kzg.DefaultConfig(),
-		PayloadBuilder: builder.DefaultConfig(),
-		Validator:      validator.DefaultConfig(),
+		Engine:            engineclient.DefaultConfig(),
+		Logger:            log.DefaultConfig(),
+		KZG:               kzg.DefaultConfig(),
+		PayloadBuilder:    builder.DefaultConfig(),
+		Validator:         validator.DefaultConfig(),
+		BlockStoreService: blockstore.DefaultConfig(),
+		NodeAPI:           server.DefaultConfig(),
 	}
 }
 
@@ -61,6 +65,10 @@ type Config struct {
 	PayloadBuilder builder.Config `mapstructure:"payload-builder"`
 	// Validator is the configuration for the validator client.
 	Validator validator.Config `mapstructure:"validator"`
+	// BlockStoreService is the configuration for the block store service.
+	BlockStoreService blockstore.Config `mapstructure:"block-store-service"`
+	// NodeAPI is the configuration for the node API.
+	NodeAPI server.Config `mapstructure:"node-api"`
 }
 
 // GetEngine returns the execution client configuration.
@@ -93,7 +101,7 @@ func MustReadConfigFromAppOpts(opts AppOptions) *Config {
 func ReadConfigFromAppOpts(opts AppOptions) (*Config, error) {
 	v, ok := opts.(*viper.Viper)
 	if !ok {
-		return nil, errors.Newf("invalid application options type: %T", opts)
+		return nil, errors.New("invalid application options type")
 	}
 
 	type cfgUnmarshaller struct {
@@ -108,10 +116,7 @@ func ReadConfigFromAppOpts(opts AppOptions) (*Config, error) {
 			viperlib.StringToDialURLFunc(),
 			viperlib.StringToConnectionURLFunc(),
 		))); err != nil {
-		return nil, errors.Newf(
-			"failed to decode beacon-kit configuration: %w",
-			err,
-		)
+		return nil, err
 	}
 
 	return &cfg.BeaconKit, nil

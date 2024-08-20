@@ -21,15 +21,15 @@
 package core
 
 import (
+	stdbytes "bytes"
 	"context"
 
 	engineprimitives "github.com/berachain/beacon-kit/mod/engine-primitives/pkg/engine-primitives"
-	gethprimitives "github.com/berachain/beacon-kit/mod/geth-primitives"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/bytes"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/constraints"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/crypto"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/eip4844"
-	"github.com/berachain/beacon-kit/mod/primitives/pkg/encoding/ssz/merkle"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
 )
 
@@ -65,10 +65,10 @@ type BeaconBlockBody[
 	BeaconBlockBodyT any,
 	DepositT any,
 	ExecutionPayloadT ExecutionPayload[
-		ExecutionPayloadT, ExecutionPayloadHeaderT, WithdrawalT,
+		ExecutionPayloadT, ExecutionPayloadHeaderT, WithdrawalsT,
 	],
 	ExecutionPayloadHeaderT ExecutionPayloadHeader,
-	WithdrawalT any,
+	WithdrawalsT any,
 ] interface {
 	constraints.EmptyWithVersion[BeaconBlockBodyT]
 	// GetRandaoReveal returns the RANDAO reveal signature.
@@ -78,9 +78,9 @@ type BeaconBlockBody[
 	// GetDeposits returns the list of deposits.
 	GetDeposits() []DepositT
 	// HashTreeRoot returns the hash tree root of the block body.
-	HashTreeRoot() ([32]byte, error)
+	HashTreeRoot() common.Root
 	// GetBlobKzgCommitments returns the KZG commitments for the blobs.
-	GetBlobKzgCommitments() eip4844.KZGCommitments[gethprimitives.ExecutionHash]
+	GetBlobKzgCommitments() eip4844.KZGCommitments[common.ExecutionHash]
 }
 
 // BeaconBlockHeader is the interface for a beacon block header.
@@ -92,11 +92,12 @@ type BeaconBlockHeader[BeaconBlockHeaderT any] interface {
 		stateRoot common.Root,
 		bodyRoot common.Root,
 	) BeaconBlockHeaderT
-	HashTreeRoot() ([32]byte, error)
+	HashTreeRoot() common.Root
 	GetSlot() math.Slot
 	GetProposerIndex() math.ValidatorIndex
 	GetParentBlockRoot() common.Root
 	GetStateRoot() common.Root
+	GetBodyRoot() common.Root
 	SetStateRoot(common.Root)
 }
 
@@ -142,48 +143,51 @@ type Deposit[
 }
 
 type ExecutionPayload[
-	ExecutionPayloadT, ExecutionPayloadHeaderT, WithdrawalT any,
+	ExecutionPayloadT, ExecutionPayloadHeaderT, WithdrawalsT any,
 ] interface {
 	constraints.EngineType[ExecutionPayloadT]
-	GetTransactions() [][]byte
-	GetParentHash() gethprimitives.ExecutionHash
-	GetBlockHash() gethprimitives.ExecutionHash
+	GetTransactions() engineprimitives.Transactions
+	GetParentHash() common.ExecutionHash
+	GetBlockHash() common.ExecutionHash
 	GetPrevRandao() common.Bytes32
-	GetWithdrawals() []WithdrawalT
-	GetFeeRecipient() gethprimitives.ExecutionAddress
+	GetWithdrawals() WithdrawalsT
+	GetFeeRecipient() common.ExecutionAddress
 	GetStateRoot() common.Bytes32
-	GetReceiptsRoot() common.Root
-	GetLogsBloom() []byte
+	GetReceiptsRoot() common.Bytes32
+	GetLogsBloom() bytes.B256
 	GetNumber() math.U64
 	GetGasLimit() math.U64
 	GetTimestamp() math.U64
 	GetGasUsed() math.U64
 	GetExtraData() []byte
-	GetBaseFeePerGas() math.U256L
+	GetBaseFeePerGas() *math.U256
 	GetBlobGasUsed() math.U64
 	GetExcessBlobGas() math.U64
 	ToHeader(
-		txsMerkleizer *merkle.Merkleizer[[32]byte, common.Root],
 		maxWithdrawalsPerPayload uint64,
+		eth1ChainID uint64,
 	) (ExecutionPayloadHeaderT, error)
 }
 
 type ExecutionPayloadHeader interface {
-	GetBlockHash() gethprimitives.ExecutionHash
+	GetBlockHash() common.ExecutionHash
 }
 
 // ExecutionEngine is the interface for the execution engine.
 type ExecutionEngine[
 	ExecutionPayloadT ExecutionPayload[
-		ExecutionPayloadT, ExecutionPayloadHeaderT, WithdrawalT],
+		ExecutionPayloadT, ExecutionPayloadHeaderT, WithdrawalsT],
 	ExecutionPayloadHeaderT any,
-	WithdrawalT Withdrawal[WithdrawalT],
+	WithdrawalsT interface {
+		Len() int
+		EncodeIndex(int, *stdbytes.Buffer)
+	},
 ] interface {
 	// VerifyAndNotifyNewPayload verifies the new payload and notifies the
 	// execution client.
 	VerifyAndNotifyNewPayload(
 		ctx context.Context,
-		req *engineprimitives.NewPayloadRequest[ExecutionPayloadT, WithdrawalT],
+		req *engineprimitives.NewPayloadRequest[ExecutionPayloadT, WithdrawalsT],
 	) error
 }
 
@@ -195,7 +199,7 @@ type ForkData[ForkDataT any] interface {
 	ComputeRandaoSigningRoot(
 		domainType common.DomainType,
 		epoch math.Epoch,
-	) (common.Root, error)
+	) common.Root
 }
 
 // Validator represents an interface for a validator with generic type
@@ -204,7 +208,8 @@ type Validator[
 	ValidatorT any,
 	WithdrawalCredentialsT ~[32]byte,
 ] interface {
-	constraints.SSZMarshallable
+	constraints.SSZMarshallableRootable
+	SizeSSZ() uint32
 	// New creates a new validator with the given parameters.
 	New(
 		pubkey crypto.BLSPubkey,
@@ -226,6 +231,10 @@ type Validator[
 	GetWithdrawableEpoch() math.Epoch
 }
 
+type Validators interface {
+	HashTreeRoot() common.Root
+}
+
 // Withdrawal is the interface for a withdrawal.
 type Withdrawal[WithdrawalT any] interface {
 	// Equals returns true if the withdrawal is equal to the other.
@@ -237,5 +246,5 @@ type Withdrawal[WithdrawalT any] interface {
 	// GetValidatorIndex returns the index of the validator.
 	GetValidatorIndex() math.ValidatorIndex
 	// GetAddress returns the address of the withdrawal.
-	GetAddress() gethprimitives.ExecutionAddress
+	GetAddress() common.ExecutionAddress
 }

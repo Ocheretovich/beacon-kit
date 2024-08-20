@@ -21,7 +21,6 @@
 package kzg_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,6 +30,7 @@ import (
 	"github.com/berachain/beacon-kit/mod/da/pkg/kzg/gokzg"
 	"github.com/berachain/beacon-kit/mod/da/pkg/types"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/eip4844"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/encoding/json"
 	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
@@ -113,7 +113,10 @@ func TestArgsFromSidecars(t *testing.T) {
 		},
 	}
 
-	args := kzg.ArgsFromSidecars(scs)
+	args := kzg.ArgsFromSidecars[
+		*types.BlobSidecar,
+		*types.BlobSidecars,
+	](scs)
 
 	require.Len(t, args.Blobs, 1)
 	require.Len(t, args.Proofs, 1)

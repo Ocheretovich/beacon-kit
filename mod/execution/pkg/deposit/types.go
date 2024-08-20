@@ -23,7 +23,6 @@ package deposit
 import (
 	"context"
 
-	asynctypes "github.com/berachain/beacon-kit/mod/async/pkg/types"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/crypto"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
 )
@@ -37,25 +36,9 @@ type BeaconBlockBody[
 }
 
 // BeaconBlock is an interface for beacon blocks.
-type BeaconBlock[
-	DepositT any,
-	BeaconBlockBodyT BeaconBlockBody[DepositT, ExecutionPayloadT],
-	ExecutionPayloadT ExecutionPayload,
-] interface {
+type BeaconBlock[BeaconBlockBodyT any] interface {
 	GetSlot() math.U64
 	GetBody() BeaconBlockBodyT
-}
-
-// BlockEvent is an interface for block events.
-type BlockEvent[
-	DepositT any,
-	BeaconBlockBodyT BeaconBlockBody[DepositT, ExecutionPayloadT],
-	BeaconBlockT BeaconBlock[DepositT, BeaconBlockBodyT, ExecutionPayloadT],
-	ExecutionPayloadT ExecutionPayload,
-] interface {
-	Type() asynctypes.EventID
-	Is(asynctypes.EventID) bool
-	Data() BeaconBlockT
 }
 
 // ExecutionPayload is an interface for execution payloads.
@@ -83,7 +66,7 @@ type Deposit[DepositT, WithdrawalCredentialsT any] interface {
 		uint64,
 	) DepositT
 	// GetIndex returns the index of the deposit.
-	GetIndex() uint64
+	GetIndex() math.U64
 }
 
 // Store defines the interface for managing deposit operations.

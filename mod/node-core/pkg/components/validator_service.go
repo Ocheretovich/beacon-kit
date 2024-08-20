@@ -22,24 +22,26 @@ package components
 
 import (
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log"
 	"github.com/berachain/beacon-kit/mod/beacon/validator"
 	"github.com/berachain/beacon-kit/mod/config"
+	"github.com/berachain/beacon-kit/mod/log"
 	"github.com/berachain/beacon-kit/mod/node-core/pkg/components/metrics"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/crypto"
 )
 
 // ValidatorServiceInput is the input for the validator service provider.
-type ValidatorServiceInput struct {
+type ValidatorServiceInput[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+] struct {
 	depinject.In
 	BeaconBlockFeed *BlockBroker
 	BlobProcessor   *BlobProcessor
 	Cfg             *config.Config
 	ChainSpec       common.ChainSpec
 	LocalBuilder    *LocalBuilder
-	Logger          log.Logger
-	StateProcessor  StateProcessor
+	Logger          LoggerT
+	StateProcessor  *StateProcessor
 	StorageBackend  *StorageBackend
 	Signer          crypto.BLSSigner
 	SidecarsFeed    *SidecarsBroker
@@ -49,17 +51,19 @@ type ValidatorServiceInput struct {
 }
 
 // ProvideValidatorService is a depinject provider for the validator service.
-func ProvideValidatorService(
-	in ValidatorServiceInput,
+func ProvideValidatorService[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+](
+	in ValidatorServiceInput[LoggerT],
 ) (*ValidatorService, error) {
 	slotSubscription, err := in.SlotBroker.Subscribe()
 	if err != nil {
 		in.Logger.Error("failed to subscribe to slot feed", "err", err)
 		return nil, err
 	}
-
 	// Build the builder service.
 	return validator.NewService[
+		*AttestationData,
 		*BeaconBlock,
 		*BeaconBlockBody,
 		*BeaconState,
@@ -70,6 +74,8 @@ func ProvideValidatorService(
 		*ExecutionPayload,
 		*ExecutionPayloadHeader,
 		*ForkData,
+		*SlashingInfo,
+		*SlotData,
 	](
 		&in.Cfg.Validator,
 		in.Logger.With("service", "validator"),

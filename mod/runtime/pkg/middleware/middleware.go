@@ -22,36 +22,28 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/berachain/beacon-kit/mod/async/pkg/broker"
 	asynctypes "github.com/berachain/beacon-kit/mod/async/pkg/types"
 	"github.com/berachain/beacon-kit/mod/log"
 	"github.com/berachain/beacon-kit/mod/p2p"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
-	"github.com/berachain/beacon-kit/mod/primitives/pkg/constraints"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/events"
-	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/transition"
 	"github.com/berachain/beacon-kit/mod/runtime/pkg/encoding"
 	rp2p "github.com/berachain/beacon-kit/mod/runtime/pkg/p2p"
-	cmtabci "github.com/cometbft/cometbft/abci/types"
 )
 
 // ABCIMiddleware is a middleware between ABCI and the validator logic.
 type ABCIMiddleware[
-	AvailabilityStoreT any,
 	BeaconBlockT BeaconBlock[BeaconBlockT],
-	BlobSidecarsT constraints.SSZMarshallable,
-	DepositT,
-	ExecutionPayloadT any,
-	GenesisT Genesis,
+	BlobSidecarsT BlobSidecars[BlobSidecarsT],
+	GenesisT json.Unmarshaler,
+	SlotDataT any,
 ] struct {
 	// chainSpec is the chain specification.
 	chainSpec common.ChainSpec
-	// chainService represents the blockchain service.
-	chainService BlockchainService[
-		BeaconBlockT, BlobSidecarsT, DepositT, GenesisT,
-	]
 	// TODO: we will eventually gossip the blobs separately from
 	// CometBFT, but for now, these are no-op gossipers.
 	blobGossiper p2p.PublisherReceiver[
@@ -82,10 +74,7 @@ type ABCIMiddleware[
 	// sidecarsBroker is a feed for sidecars.
 	sidecarsBroker *broker.Broker[*asynctypes.Event[BlobSidecarsT]]
 	// slotBroker is a feed for slots.
-	slotBroker *broker.Broker[*asynctypes.Event[math.Slot]]
-
-	// TODO: this is a temporary hack.
-	req *cmtabci.FinalizeBlockRequest
+	slotBroker *broker.Broker[*asynctypes.Event[SlotDataT]]
 
 	// Channels
 	// blkCh is used to communicate the beacon block to the EndBlock method.
@@ -99,34 +88,26 @@ type ABCIMiddleware[
 
 // NewABCIMiddleware creates a new instance of the Handler struct.
 func NewABCIMiddleware[
-	AvailabilityStoreT any,
 	BeaconBlockT BeaconBlock[BeaconBlockT],
-	BlobSidecarsT constraints.SSZMarshallable,
-	DepositT,
-	ExecutionPayloadT any,
-	GenesisT Genesis,
+	BlobSidecarsT BlobSidecars[BlobSidecarsT],
+	GenesisT json.Unmarshaler,
+	SlotDataT any,
 ](
 	chainSpec common.ChainSpec,
-	chainService BlockchainService[
-		BeaconBlockT, BlobSidecarsT, DepositT, GenesisT,
-	],
 	logger log.Logger[any],
 	telemetrySink TelemetrySink,
 	genesisBroker *broker.Broker[*asynctypes.Event[GenesisT]],
 	blkBroker *broker.Broker[*asynctypes.Event[BeaconBlockT]],
 	sidecarsBroker *broker.Broker[*asynctypes.Event[BlobSidecarsT]],
-	slotBroker *broker.Broker[*asynctypes.Event[math.Slot]],
+	slotBroker *broker.Broker[*asynctypes.Event[SlotDataT]],
 	valUpdateSub chan *asynctypes.Event[transition.ValidatorUpdates],
 ) *ABCIMiddleware[
-	AvailabilityStoreT, BeaconBlockT,
-	BlobSidecarsT, DepositT, ExecutionPayloadT, GenesisT,
+	BeaconBlockT, BlobSidecarsT, GenesisT, SlotDataT,
 ] {
 	return &ABCIMiddleware[
-		AvailabilityStoreT, BeaconBlockT,
-		BlobSidecarsT, DepositT, ExecutionPayloadT, GenesisT,
+		BeaconBlockT, BlobSidecarsT, GenesisT, SlotDataT,
 	]{
-		chainSpec:    chainSpec,
-		chainService: chainService,
+		chainSpec: chainSpec,
 		blobGossiper: rp2p.NewNoopBlobHandler[
 			BlobSidecarsT, encoding.ABCIRequest,
 		](),
@@ -155,17 +136,14 @@ func NewABCIMiddleware[
 }
 
 // Name returns the name of the middleware.
-func (am *ABCIMiddleware[
-	AvailabilityStoreT, BeaconBlockT,
-	BlobSidecarsT, DepositT, ExecutionPayloadT, GenesisT,
-]) Name() string {
+func (am *ABCIMiddleware[_, _, _, _]) Name() string {
 	return "abci-middleware"
 }
 
 // Start the middleware.
-func (am *ABCIMiddleware[
-	_, _, _, _, _, _,
-]) Start(ctx context.Context) error {
+func (am *ABCIMiddleware[_, _, _, _]) Start(
+	ctx context.Context,
+) error {
 	subBlkCh, err := am.blkBroker.Subscribe()
 	if err != nil {
 		return err
@@ -182,7 +160,7 @@ func (am *ABCIMiddleware[
 
 // start starts the middleware.
 func (am *ABCIMiddleware[
-	_, BeaconBlockT, BlobSidecarsT, _, _, _,
+	BeaconBlockT, BlobSidecarsT, _, _,
 ]) start(
 	ctx context.Context,
 	blkCh chan *asynctypes.Event[BeaconBlockT],

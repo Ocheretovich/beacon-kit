@@ -21,18 +21,21 @@
 package components
 
 import (
-	"cosmossdk.io/core/log"
 	"cosmossdk.io/depinject"
 	"github.com/berachain/beacon-kit/mod/beacon/blockchain"
 	"github.com/berachain/beacon-kit/mod/config"
+	"github.com/berachain/beacon-kit/mod/log"
 	"github.com/berachain/beacon-kit/mod/node-core/pkg/components/metrics"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/crypto"
 )
 
 // ChainServiceInput is the input for the chain service provider.
-type ChainServiceInput struct {
+type ChainServiceInput[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+] struct {
 	depinject.In
+
 	BlockBroker           *BlockBroker
 	ChainSpec             common.ChainSpec
 	Cfg                   *config.Config
@@ -41,17 +44,19 @@ type ChainServiceInput struct {
 	ExecutionEngine       *ExecutionEngine
 	GenesisBrocker        *GenesisBroker
 	LocalBuilder          *LocalBuilder
-	Logger                log.Logger
+	Logger                LoggerT
 	Signer                crypto.BLSSigner
-	StateProcessor        StateProcessor
+	StateProcessor        *StateProcessor
 	StorageBackend        *StorageBackend
 	TelemetrySink         *metrics.TelemetrySink
 	ValidatorUpdateBroker *ValidatorUpdateBroker
 }
 
 // ProvideChainService is a depinject provider for the blockchain service.
-func ProvideChainService(
-	in ChainServiceInput,
+func ProvideChainService[
+	LoggerT log.AdvancedLogger[any, LoggerT],
+](
+	in ChainServiceInput[LoggerT],
 ) *ChainService {
 	return blockchain.NewService[
 		*AvailabilityStore,
@@ -59,13 +64,11 @@ func ProvideChainService(
 		*BeaconBlockBody,
 		*BeaconBlockHeader,
 		*BeaconState,
-		*BlobSidecars,
 		*Deposit,
 		*ExecutionPayload,
 		*ExecutionPayloadHeader,
 		*Genesis,
 		*PayloadAttributes,
-		*Withdrawal,
 	](
 		in.StorageBackend,
 		in.Logger.With("service", "blockchain"),

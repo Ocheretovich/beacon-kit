@@ -25,9 +25,10 @@ import (
 
 	"github.com/berachain/beacon-kit/mod/consensus-types/pkg/types"
 	"github.com/berachain/beacon-kit/mod/geth-primitives/pkg/deposit"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/testing/e2e/suite"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
+	gethcommon "github.com/ethereum/go-ethereum/common"
 	coretypes "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -79,7 +80,7 @@ func (s *BeaconKitE2ESuite) TestDepositRobustness() {
 
 	// Bind the deposit contract.
 	dc, err := deposit.NewBeaconDepositContract(
-		common.HexToAddress(DepositContractAddress),
+		gethcommon.HexToAddress(DepositContractAddress),
 		s.JSONRPCBalancer(),
 	)
 	s.Require().NoError(err)
@@ -93,7 +94,7 @@ func (s *BeaconKitE2ESuite) TestDepositRobustness() {
 	// Wait for the transaction to be mined.
 	receipt, err := bind.WaitMined(s.Ctx(), s.JSONRPCBalancer(), tx)
 	s.Require().NoError(err)
-	s.Require().Equal(uint64(1), receipt.Status)
+	s.Require().Equal(coretypes.ReceiptStatusSuccessful, receipt.Status)
 
 	tx, err = dc.AllowDeposit(&bind.TransactOpts{
 		From:   genesisAccount.Address(),
@@ -104,7 +105,7 @@ func (s *BeaconKitE2ESuite) TestDepositRobustness() {
 	// Wait for the transaction to be mined.
 	receipt, err = bind.WaitMined(s.Ctx(), s.JSONRPCBalancer(), tx)
 	s.Require().NoError(err)
-	s.Require().Equal(uint64(1), receipt.Status)
+	s.Require().Equal(coretypes.ReceiptStatusSuccessful, receipt.Status)
 
 	// Get the nonce.
 	nonce, err := s.JSONRPCBalancer().NonceAt(
@@ -132,7 +133,7 @@ func (s *BeaconKitE2ESuite) TestDepositRobustness() {
 			)
 			receipt, err = bind.WaitMined(s.Ctx(), s.JSONRPCBalancer(), tx)
 			s.Require().NoError(err)
-			s.Require().Equal(uint64(1), receipt.Status)
+			s.Require().Equal(coretypes.ReceiptStatusSuccessful, receipt.Status)
 			s.Logger().
 				Info("Deposit transaction mined", "txHash", receipt.TxHash.Hex())
 		}
@@ -191,7 +192,7 @@ func (s *BeaconKitE2ESuite) TestDepositRobustness() {
 
 func (s *BeaconKitE2ESuite) generateNewDepositTx(
 	dc *deposit.BeaconDepositContract,
-	sender common.Address,
+	sender gethcommon.Address,
 	signer bind.SignerFn,
 	nonce *big.Int,
 ) (*coretypes.Transaction, error) {
@@ -205,7 +206,7 @@ func (s *BeaconKitE2ESuite) generateNewDepositTx(
 
 	// Generate the credentials.
 	credentials := types.NewCredentialsFromExecutionAddress(
-		s.GenesisAccount().Address(),
+		common.ExecutionAddress(s.GenesisAccount().Address()),
 	)
 
 	// Generate the signature.

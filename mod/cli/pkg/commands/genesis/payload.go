@@ -21,26 +21,22 @@
 package genesis
 
 import (
-	"context"
-	"encoding/json"
 	"unsafe"
 
-	serverContext "github.com/berachain/beacon-kit/mod/cli/pkg/utils/context"
-	"github.com/berachain/beacon-kit/mod/consensus-types/pkg/genesis"
 	"github.com/berachain/beacon-kit/mod/consensus-types/pkg/types"
 	engineprimitives "github.com/berachain/beacon-kit/mod/engine-primitives/pkg/engine-primitives"
 	"github.com/berachain/beacon-kit/mod/errors"
 	gethprimitives "github.com/berachain/beacon-kit/mod/geth-primitives"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/constants"
-	"github.com/berachain/beacon-kit/mod/primitives/pkg/encoding/ssz"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/encoding/json"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/version"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
 )
 
 func AddExecutionPayloadCmd(chainSpec common.ChainSpec) *cobra.Command {
@@ -69,8 +65,7 @@ func AddExecutionPayloadCmd(chainSpec common.ChainSpec) *cobra.Command {
 				nil,
 			).ExecutionPayload
 
-			serverCtx := serverContext.GetServerContextFromCmd(cmd)
-			config := serverCtx.Config
+			config := client.GetConfigFromCmd(cmd)
 
 			appGenesis, err := genutiltypes.AppGenesisFromFile(
 				config.GenesisFile(),
@@ -87,7 +82,7 @@ func AddExecutionPayloadCmd(chainSpec common.ChainSpec) *cobra.Command {
 				return err
 			}
 
-			genesisInfo := &genesis.Genesis[
+			genesisInfo := &types.Genesis[
 				*types.Deposit, *types.ExecutionPayloadHeader,
 			]{}
 
@@ -98,18 +93,11 @@ func AddExecutionPayloadCmd(chainSpec common.ChainSpec) *cobra.Command {
 			}
 
 			// Inject the execution payload.
-			header, err := executableDataToExecutionPayloadHeader(
+			genesisInfo.ExecutionPayloadHeader = executableDataToExecutionPayloadHeader(
 				version.ToUint32(genesisInfo.ForkVersion),
 				payload,
 				chainSpec.MaxWithdrawalsPerPayload(),
 			)
-			if err != nil {
-				return errors.Wrap(
-					err,
-					"failed to convert executable data to execution payload header",
-				)
-			}
-			genesisInfo.ExecutionPayloadHeader = header
 
 			appGenesisState["beacon"], err = json.Marshal(genesisInfo)
 			if err != nil {
@@ -134,11 +122,12 @@ func AddExecutionPayloadCmd(chainSpec common.ChainSpec) *cobra.Command {
 func executableDataToExecutionPayloadHeader(
 	forkVersion uint32,
 	data *gethprimitives.ExecutableData,
-	maxWithdrawalsPerPayload uint64,
-) (*types.ExecutionPayloadHeader, error) {
+	// todo: re-enable when codec supports.
+	_ uint64,
+) *types.ExecutionPayloadHeader {
 	var executionPayloadHeader *types.ExecutionPayloadHeader
 	switch forkVersion {
-	case version.Deneb:
+	case version.Deneb, version.DenebPlus:
 		withdrawals := make(
 			[]*engineprimitives.Withdrawal,
 			len(data.Withdrawals),
@@ -166,60 +155,33 @@ func executableDataToExecutionPayloadHeader(
 			excessBlobGas = *data.ExcessBlobGas
 		}
 
-		// Get the merkle roots of transactions and withdrawals in parallel.
-		var (
-			g, _            = errgroup.WithContext(context.Background())
-			txsRoot         common.Root
-			withdrawalsRoot common.Root
-		)
-
-		g.Go(func() error {
-			var txsRootErr error
-			txsRoot, txsRootErr = engineprimitives.Transactions(
-				data.Transactions,
-			).HashTreeRoot()
-			return txsRootErr
-		})
-
-		g.Go(func() error {
-			var withdrawalsRootErr error
-			wds := ssz.ListFromElements(
-				maxWithdrawalsPerPayload, withdrawals...,
-			)
-			withdrawalsRoot, withdrawalsRootErr = wds.HashTreeRoot()
-			return withdrawalsRootErr
-		})
-
-		// If deriving either of the roots fails, return the error.
-		if err := g.Wait(); err != nil {
-			return nil, err
-		}
-
 		executionPayloadHeader = &types.ExecutionPayloadHeader{
-			InnerExecutionPayloadHeader: &types.ExecutionPayloadHeaderDeneb{
-				ParentHash:   data.ParentHash,
-				FeeRecipient: data.FeeRecipient,
-				StateRoot:    common.Bytes32(data.StateRoot),
-				ReceiptsRoot: common.Bytes32(data.ReceiptsRoot),
-				LogsBloom:    data.LogsBloom,
-				Random:       common.Bytes32(data.Random),
-				Number:       math.U64(data.Number),
-				GasLimit:     math.U64(data.GasLimit),
-				GasUsed:      math.U64(data.GasUsed),
-				Timestamp:    math.U64(data.Timestamp),
-				ExtraData:    data.ExtraData,
-				BaseFeePerGas: math.MustNewU256LFromBigInt(
-					data.BaseFeePerGas,
-				),
-				BlockHash:        data.BlockHash,
-				TransactionsRoot: txsRoot,
-				WithdrawalsRoot:  withdrawalsRoot,
-				BlobGasUsed:      math.U64(blobGasUsed),
-				ExcessBlobGas:    math.U64(excessBlobGas),
-			}}
+			ParentHash:    common.ExecutionHash(data.ParentHash),
+			FeeRecipient:  common.ExecutionAddress(data.FeeRecipient),
+			StateRoot:     common.Bytes32(data.StateRoot),
+			ReceiptsRoot:  common.Bytes32(data.ReceiptsRoot),
+			LogsBloom:     [256]byte(data.LogsBloom),
+			Random:        common.Bytes32(data.Random),
+			Number:        math.U64(data.Number),
+			GasLimit:      math.U64(data.GasLimit),
+			GasUsed:       math.U64(data.GasUsed),
+			Timestamp:     math.U64(data.Timestamp),
+			ExtraData:     data.ExtraData,
+			BaseFeePerGas: math.NewU256FromBigInt(data.BaseFeePerGas),
+			BlockHash:     common.ExecutionHash(data.BlockHash),
+			// TODO: Decouple from broken bArtio.
+			TransactionsRoot: engineprimitives.
+				BartioTransactions(
+					data.Transactions,
+				).HashTreeRoot(),
+			WithdrawalsRoot: engineprimitives.Withdrawals(withdrawals).
+				HashTreeRoot(),
+			BlobGasUsed:   math.U64(blobGasUsed),
+			ExcessBlobGas: math.U64(excessBlobGas),
+		}
 	default:
-		return nil, errors.Newf("unsupported fork version %d", forkVersion)
+		panic("unsupported fork version")
 	}
 
-	return executionPayloadHeader, nil
+	return executionPayloadHeader
 }

@@ -63,7 +63,7 @@ func (s *Store[BeaconBlockBodyT]) IsDataAvailable(
 ) bool {
 	for _, commitment := range body.GetBlobKzgCommitments() {
 		// Check if the block data is available in the IndexDB
-		blockData, err := s.IndexDB.Has(uint64(slot), commitment[:])
+		blockData, err := s.IndexDB.Has(slot.Unwrap(), commitment[:])
 		if err != nil || !blockData {
 			return false
 		}
@@ -106,7 +106,7 @@ func (s *Store[BeaconBlockT]) Persist(
 			if err != nil {
 				return err
 			}
-			return s.Set(uint64(slot), sc.KzgCommitment[:], bz)
+			return s.Set(slot.Unwrap(), sc.KzgCommitment[:], bz)
 		},
 	)...); err != nil {
 		return err

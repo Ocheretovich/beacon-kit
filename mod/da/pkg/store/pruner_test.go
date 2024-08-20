@@ -21,12 +21,14 @@
 package store_test
 
 import (
+	"context"
 	"testing"
 
+	asynctypes "github.com/berachain/beacon-kit/mod/async/pkg/types"
 	"github.com/berachain/beacon-kit/mod/chain-spec/pkg/chain"
 	"github.com/berachain/beacon-kit/mod/da/pkg/store"
-	gethprimitives "github.com/berachain/beacon-kit/mod/geth-primitives"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/bytes"
+	"github.com/berachain/beacon-kit/mod/primitives/pkg/common"
 	"github.com/berachain/beacon-kit/mod/primitives/pkg/math"
 	"github.com/stretchr/testify/require"
 )
@@ -39,16 +41,6 @@ type MockBeaconBlock struct {
 // Mock implementations GetSlot() for BeaconBlock.
 func (b MockBeaconBlock) GetSlot() math.U64 {
 	return b.slot
-}
-
-// Mock implementations for BlockEvent.
-type MockBlockEvent struct {
-	data MockBeaconBlock
-}
-
-// Mock implementations Data() for BlockEvent.
-func (e MockBlockEvent) Data() MockBeaconBlock {
-	return e.data
 }
 
 // TestBuildPruneRangeFn tests the BuildPruneRangeFn function.
@@ -117,20 +109,22 @@ func TestBuildPruneRangeFn(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cs := chain.NewChainSpec(
 				chain.SpecData[
-					bytes.B4, math.U64, gethprimitives.ExecutionAddress, math.U64, any,
+					bytes.B4, math.U64, common.ExecutionAddress, math.U64, any,
 				]{
 					SlotsPerEpoch:                    tt.slotsPerEpoch,
 					MinEpochsForBlobsSidecarsRequest: tt.minEpochs,
 				},
 			)
-			pruneFn := store.BuildPruneRangeFn[MockBeaconBlock, MockBlockEvent](
+			pruneFn := store.BuildPruneRangeFn[MockBeaconBlock](
 				cs,
 			)
-			event := MockBlockEvent{
-				data: MockBeaconBlock{
+			event := asynctypes.NewEvent[MockBeaconBlock](
+				context.Background(),
+				asynctypes.EventID("mock"),
+				MockBeaconBlock{
 					slot: tt.eventSlot,
 				},
-			}
+			)
 			start, end := pruneFn(event)
 			require.Equal(
 				t,
